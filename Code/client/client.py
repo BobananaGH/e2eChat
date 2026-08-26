@@ -8,6 +8,7 @@ from client.core.crypto import E2EECrypto
 from client.core.key_exchange import KeyExchange
 from client.core.messaging import Messaging
 from client.core.router import MessageRouter
+from client.core.friends import FriendManager
 from client.tls import TLSConnection
 
 
@@ -41,29 +42,26 @@ class E2EEClient:
     ):
         self.host = host
         self.port = port
-
         self.username = None
         self.authenticated = False
+        self.on_auth_result = None
         self.running = False
 
         # --------------------------------------------------------------
         # E2EE CORE
         # --------------------------------------------------------------
-
         self.crypto = E2EECrypto()
         self.key_exchange = KeyExchange(self)
         self.messaging = Messaging(self)
-
+        self.friends = FriendManager(self)
         # --------------------------------------------------------------
         # MESSAGE ROUTER
         # --------------------------------------------------------------
-
         self.router = MessageRouter(self)
 
         # --------------------------------------------------------------
         # TLS CONNECTION
         # --------------------------------------------------------------
-
         self.tls = TLSConnection(
             self.host,
             self.port,
@@ -73,7 +71,6 @@ class E2EEClient:
         # --------------------------------------------------------------
         # PROTOCOL CONNECTION
         # --------------------------------------------------------------
-
         self.conn = Connection(
             self.tls.socket
         )
@@ -81,14 +78,11 @@ class E2EEClient:
         # --------------------------------------------------------------
         # RECEIVER THREAD
         # --------------------------------------------------------------
-
         self.running = True
-
         self._listener_thread = threading.Thread(
             target=self._listen_loop,
             daemon=True,
         )
-
         self._listener_thread.start()
 
     # ==================================================================
@@ -155,7 +149,11 @@ class E2EEClient:
                 ConnectionResetError,
                 BrokenPipeError,
                 OSError,
-            ):
+            ) as exc:
+                print(
+                    f"[CLIENT] Listener socket error: "
+                    f"{type(exc).__name__}: {exc}"
+                )
                 break
 
             except Exception as exc:

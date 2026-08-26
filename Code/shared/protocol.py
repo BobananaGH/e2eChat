@@ -1,8 +1,6 @@
-# Code/shared/protocol.py
 import json
 import struct
 import threading
-
 from enum import Enum
 
 
@@ -16,6 +14,9 @@ class MessageType(str, Enum):
     UPLOAD_PUBLIC_KEY = "UPLOAD_PUBLIC_KEY"
     FETCH_PUBLIC_KEY = "FETCH_PUBLIC_KEY"
     PUBLIC_KEY_RESPONSE = "PUBLIC_KEY_RESPONSE"
+
+    FETCH_USERS = "FETCH_USERS"
+    USERS_RESPONSE = "USERS_RESPONSE"
 
     SEND_MSG = "SEND_MSG"
     RELAY_MSG = "RELAY_MSG"
@@ -159,7 +160,7 @@ class Connection:
     def close(self):
         try:
             self.socket.shutdown(
-                2  # SHUT_RDWR
+                2
             )
         except OSError:
             pass

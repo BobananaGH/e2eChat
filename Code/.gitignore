@@ -6,3 +6,4 @@ file_storage/
 *.log
 .env
 
+server/data/*.db

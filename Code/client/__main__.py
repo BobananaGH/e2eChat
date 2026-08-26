@@ -1,4 +1,4 @@
-# code/client/__main__.py
+# Code/client/__main__.py
 from client.clientGui import main
 
 

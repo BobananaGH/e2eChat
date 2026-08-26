@@ -4,6 +4,7 @@ from shared.protocol import Connection, MessageType
 from server.core.auth_handler import AuthHandler
 from server.core.key_handler import KeyHandler
 from server.core.message_handler import MessageHandler
+from server.core.user_handler import UserHandler
 
 
 class ClientHandler:
@@ -51,6 +52,7 @@ class ClientHandler:
         self.auth_handler = AuthHandler(self)
         self.key_handler = KeyHandler(self)
         self.message_handler = MessageHandler(self)
+        self.user_handler = UserHandler(self)
 
     # ==================================================================
     # MAIN HANDLER
@@ -134,7 +136,12 @@ class ClientHandler:
             self.message_handler.handle_send_message(
                 payload
             )
-
+            
+        elif message_type == MessageType.FETCH_USERS:
+            self.user_handler.handle_fetch_users(
+                payload
+            )
+            
         else:
             self.connection.send(
                 MessageType.ERROR,

@@ -11,6 +11,18 @@ class KeyExchange:
 
     E2EECrypto performs the actual ECDH/HKDF operations.
     This class manages which peer uses which derived session key.
+
+    Session establishment is one-directional by nature: whichever
+    side fetches a peer's public key first is the one that creates
+    the session locally. The other side gets its own session
+    independently, the first time it needs one for that peer -
+    either because it also sends a message, or because it receives
+    one first (see Messaging.handle_received, which now triggers a
+    key fetch automatically on an unknown sender instead of failing).
+
+    This class does NOT:
+        - Buffer messages (that's Messaging's job)
+        - Decide when to reactively fetch a key on receipt
     """
 
     def __init__(self, client):
@@ -18,6 +30,15 @@ class KeyExchange:
 
         # {username: E2EECrypto}
         self.peers = {}
+
+        # Optional callback, set by ChatController.
+        #
+        # callback(username)
+        #
+        # Fired once a session with `username` becomes available,
+        # whether we requested the key ourselves or Messaging
+        # requested it reactively after an unknown sender's message.
+        self.on_session_established = None
 
     def publish_public_key(self):
         """Upload our ECDH public key to the server."""
@@ -63,6 +84,10 @@ class KeyExchange:
         """
         Create a per-peer E2EE session and derive
         the shared AES key using ECDH.
+
+        Also flushes any inbound messages Messaging buffered
+        while waiting for this session, and notifies whoever
+        is waiting to flush outbound messages.
         """
 
         session = E2EECrypto()
@@ -87,6 +112,16 @@ class KeyExchange:
             f"[E2EE] Shared key established "
             f"with '{target_username}'."
         )
+
+        # Deliver any messages that arrived before this session existed.
+        self.client.messaging.flush_pending(
+            target_username
+        )
+
+        if self.on_session_established:
+            self.on_session_established(
+                target_username
+            )
 
     def has_session(self, username: str) -> bool:
         return username in self.peers

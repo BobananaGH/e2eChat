@@ -1,371 +1,259 @@
-/* ============================================================
-   E2EEChat — Modern 2026 Dark UI
-   ============================================================ */
-
-/* ============================================================
-   ROOT
-   ============================================================ */
-
-QMainWindow,
-QWidget#centralWidget {
-    background: #0f1117;
-    color: #e6e9ef;
-}
+/* =========================================================
+   Global
+   ========================================================= */
 
 QWidget {
+    background-color: #313338;
+    color: #dbdee1;
     font-family: "Segoe UI";
     font-size: 14px;
 }
 
-
-/* ============================================================
-   LEFT SIDEBAR
-   ============================================================ */
-
-QWidget#sidebar {
-    background: #151821;
-    border-right: 1px solid #252936;
+QMainWindow {
+    background-color: #313338;
 }
 
-QWidget#appHeader {
-    background: #151821;
+/* =========================================================
+   Chat Header
+   ========================================================= */
+
+#chatHeader {
+    background-color: #2b2d31;
+    border-bottom: 1px solid #1e1f22;
 }
 
-QLabel#appTitle {
-    color: #f5f7fb;
-    font-size: 21px;
-    font-weight: 700;
+#chatAvatar {
+    background-color: #5865f2;
+    color: white;
+    border-radius: 17px;
+    font-size: 13px;
+    font-weight: bold;
 }
 
+#chatUsername {
+    color: #f2f3f5;
+    font-size: 15px;
+    font-weight: 600;
+}
 
-/* ============================================================
-   SEARCH
-   ============================================================ */
+#chatStatus {
+    color: #949ba4;
+    font-size: 12px;
+}
 
-QLineEdit#searchInput {
-    background: #20242e;
-    border: 1px solid #2b303c;
+/* =========================================================
+   Chat Messages
+   ========================================================= */
+
+#chatScroll {
+    background-color: #313338;
+    border: none;
+}
+
+#messageContainer {
+    background-color: #313338;
+}
+
+#chatEmpty {
+    color: #80848e;
+    font-size: 14px;
+}
+
+#incomingMessage {
+    background-color: #2b2d31;
     border-radius: 8px;
-    padding: 9px 12px;
-    color: #e8ebf1;
+    border: none;
+}
+
+#outgoingMessage {
+    background-color: #5865f2;
+    border-radius: 8px;
+    border: none;
+}
+
+#messageSender {
+    color: #b5bac1;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#messageText {
+    color: #f2f3f5;
+    font-size: 14px;
+}
+
+#messageTimestamp {
+    color: #949ba4;
+    font-size: 10px;
+}
+
+/* =========================================================
+   Chat Input
+   ========================================================= */
+
+#chatInputFrame {
+    background-color: #2b2d31;
+    border-top: 1px solid #1e1f22;
+}
+
+#messageInput {
+    background-color: #383a40;
+    color: #dbdee1;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
     selection-background-color: #5865f2;
 }
 
-QLineEdit#searchInput:focus {
-    border: 1px solid #5865f2;
+#messageInput:focus {
+    background-color: #404249;
 }
 
-QLineEdit#searchInput::placeholder {
-    color: #777d8c;
+#messageInput:disabled {
+    color: #72767d;
 }
 
-
-/* ============================================================
-   SIDEBAR SECTION
-   ============================================================ */
-
-QLabel#sectionLabel {
-    color: #777e8e;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
+#attachmentBtn {
+    background-color: transparent;
+    color: #b5bac1;
+    border: none;
+    border-radius: 17px;
+    font-size: 20px;
+    font-weight: bold;
 }
 
+#attachmentBtn:hover {
+    background-color: #404249;
+    color: #f2f3f5;
+}
 
-/* ============================================================
-   CHAT LIST
-   ============================================================ */
+#attachmentBtn:pressed {
+    background-color: #4e5058;
+}
 
-QListWidget#chatList {
-    background: transparent;
+#attachmentBtn:disabled {
+    color: #4e5058;
+}
+
+#sendBtn {
+    background-color: #5865f2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    font-weight: 600;
+}
+
+#sendBtn:hover {
+    background-color: #4752c4;
+}
+
+#sendBtn:pressed {
+    background-color: #3c45a5;
+}
+
+#sendBtn:disabled {
+    background-color: #3f4147;
+    color: #72767d;
+}
+
+/* =========================================================
+   Friend View
+   ========================================================= */
+
+#friendList {
+    background-color: #2b2d31;
     border: none;
     outline: none;
-    padding: 4px 8px;
+    padding: 4px 6px;
 }
 
-QListWidget#chatList::item {
-    background: transparent;
-    border-radius: 8px;
-    padding: 0px;
-    margin: 1px 0px;
+#friendList::item {
+    background-color: transparent;
+    color: #b5bac1;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 2px 0;
 }
 
-QListWidget#chatList::item:hover {
-    background: #20242e;
+#friendList::item:hover {
+    background-color: #35373c;
+    color: #dbdee1;
 }
 
-QListWidget#chatList::item:selected {
-    background: #2a2f3b;
-}
-
-QLabel#chatListName {
-    color: #e7eaf0;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-QLabel#chatListStatus {
-    color: #7e8493;
-    font-size: 12px;
-}
-
-QLabel#userStatus {
-    color: #43d17a;
-    font-size: 11px;
-}
-
-
-/* ============================================================
-   ACCOUNT PANEL
-   ============================================================ */
-
-QWidget#accountPanel {
-    background: #11141b;
-    border-top: 1px solid #252936;
-}
-
-QLabel#accountStatus {
-    color: #43d17a;
-    font-size: 11px;
-}
-
-QLabel#accountName {
-    color: #f0f2f6;
-    font-size: 13px;
-    font-weight: 600;
-}
-
-QLabel#accountState {
-    color: #777e8e;
-    font-size: 11px;
-}
-
-QPushButton#settingsButton {
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    color: #8b91a0;
-    font-size: 18px;
-}
-
-QPushButton#settingsButton:hover {
-    background: #252a35;
+#friendList::item:selected {
+    background-color: #404249;
     color: #ffffff;
 }
 
-QPushButton#settingsButton:pressed {
-    background: #303644;
-}
-
-
-/* ============================================================
-   RIGHT CHAT AREA
-   ============================================================ */
-
-QWidget#chatArea {
-    background: #0f1117;
-}
-
-
-/* ============================================================
-   CHAT HEADER
-   ============================================================ */
-
-QWidget#chatHeader {
-    background: #13161d;
-    border-bottom: 1px solid #252936;
-}
-
-QLabel#chatAvatar {
-    color: #43d17a;
-    font-size: 15px;
-}
-
-QLabel#chatUsername {
-    color: #f3f5f8;
-    font-size: 15px;
-    font-weight: 700;
-}
-
-QLabel#chatStatus {
-    color: #777e8e;
-    font-size: 11px;
-}
-
-QLabel#e2eeIndicator {
-    color: #43d17a;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-QPushButton#chatMenuButton {
-    background: transparent;
+#friendSearch {
+    background-color: #1e1f22;
+    color: #dbdee1;
     border: none;
-    border-radius: 8px;
-    color: #858b9a;
-    font-size: 22px;
-}
-
-QPushButton#chatMenuButton:hover {
-    background: #242934;
-    color: #ffffff;
-}
-
-QPushButton#chatMenuButton:pressed {
-    background: #303644;
-}
-
-
-/* ============================================================
-   MESSAGE AREA
-   ============================================================ */
-
-QScrollArea#messageScroll {
-    background: #0f1117;
-    border: none;
-}
-
-QWidget#messageContainer {
-    background: #0f1117;
-}
-
-
-/* ============================================================
-   MESSAGE BUBBLES
-   ============================================================ */
-
-QFrame#incomingMessage {
-    background: #20242e;
-    border: 1px solid #292e39;
-    border-radius: 12px;
-}
-
-QFrame#outgoingMessage {
-    background: #5865f2;
-    border: 1px solid #5865f2;
-    border-radius: 12px;
-}
-
-QLabel#messageSender {
-    color: #8f96a6;
-    font-size: 11px;
-    font-weight: 600;
-}
-
-QFrame#outgoingMessage QLabel#messageSender {
-    color: #dfe2ff;
-}
-
-QLabel#messageText {
-    color: #e9ecf2;
-    font-size: 14px;
-}
-
-QFrame#outgoingMessage QLabel#messageText {
-    color: #ffffff;
-}
-
-
-/* ============================================================
-   MESSAGE INPUT
-   ============================================================ */
-
-QWidget#inputContainer {
-    background: #13161d;
-    border-top: 1px solid #252936;
-}
-
-QLineEdit#messageInput {
-    background: #20242e;
-    border: 1px solid #2b303c;
-    border-radius: 10px;
-    padding: 10px 13px;
-    color: #f0f2f6;
+    border-radius: 6px;
+    padding: 8px 10px;
     selection-background-color: #5865f2;
 }
 
-QLineEdit#messageInput:focus {
-    border: 1px solid #5865f2;
+#friendSearch:focus {
+    background-color: #111214;
 }
 
-QLineEdit#messageInput::placeholder {
-    color: #777e8e;
+#searchIcon {
+    color: #949ba4;
 }
 
+/* =========================================================
+   Friends Header
+   ========================================================= */
 
-/* ============================================================
-   ATTACH BUTTON
-   ============================================================ */
-
-QPushButton#attachButton {
-    background: #20242e;
-    border: 1px solid #2b303c;
-    border-radius: 10px;
-    color: #aeb4c1;
-    font-size: 22px;
-    font-weight: 400;
-}
-
-QPushButton#attachButton:hover {
-    background: #292e39;
-    color: #ffffff;
-}
-
-QPushButton#attachButton:pressed {
-    background: #343a48;
-}
-
-
-/* ============================================================
-   SEND BUTTON
-   ============================================================ */
-
-QPushButton#sendButton {
-    background: #5865f2;
-    border: none;
-    border-radius: 10px;
-    color: #ffffff;
-    font-size: 18px;
+#sectionLabel {
+    color: #949ba4;
+    font-size: 11px;
     font-weight: 700;
+    letter-spacing: 0.5px;
 }
 
-QPushButton#sendButton:hover {
-    background: #6975f5;
+#addFriendBtn {
+    background-color: #5865f2;
+    color: white;
+    border: none;
+    border-radius: 15px;
+    font-size: 20px;
+    font-weight: 500;
 }
 
-QPushButton#sendButton:pressed {
-    background: #4752c4;
+#addFriendBtn:hover {
+    background-color: #4752c4;
 }
 
-QPushButton#sendButton:disabled {
-    background: #292e39;
-    color: #5f6572;
+#addFriendBtn:pressed {
+    background-color: #3c45a5;
 }
 
-
-/* ============================================================
-   SCROLLBAR
-   ============================================================ */
+/* =========================================================
+   Scrollbars
+   ========================================================= */
 
 QScrollBar:vertical {
-    background: transparent;
+    background-color: transparent;
     width: 10px;
-    margin: 2px;
+    margin: 4px 2px 4px 0;
 }
 
 QScrollBar::handle:vertical {
-    background: #303542;
+    background-color: #1e1f22;
     min-height: 40px;
     border-radius: 5px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: #414756;
+    background-color: #18191c;
 }
 
 QScrollBar::add-line:vertical,
 QScrollBar::sub-line:vertical {
-    height: 0px;
+    height: 0;
 }
 
 QScrollBar::add-page:vertical,
@@ -373,28 +261,66 @@ QScrollBar::sub-page:vertical {
     background: transparent;
 }
 
+/* =========================================================
+   Buttons
+   ========================================================= */
 
-/* ============================================================
-   HORIZONTAL SCROLLBAR
-   ============================================================ */
-
-QScrollBar:horizontal {
-    background: transparent;
-    height: 10px;
+QPushButton {
+    outline: none;
 }
 
-QScrollBar::handle:horizontal {
-    background: #303542;
-    min-width: 40px;
-    border-radius: 5px;
+/* =========================================================
+   Login View
+   ========================================================= */
+
+#title {
+    color: #f2f3f5;
+    font-size: 28px;
+    font-weight: 700;
 }
 
-QScrollBar::add-line:horizontal,
-QScrollBar::sub-line:horizontal {
-    width: 0px;
+QLabel {
+    color: #b5bac1;
 }
 
-QScrollBar::add-page:horizontal,
-QScrollBar::sub-page:horizontal {
-    background: transparent;
+QLineEdit {
+    background-color: #1e1f22;
+    color: #dbdee1;
+    border: 1px solid #1e1f22;
+    border-radius: 6px;
+    padding: 10px 12px;
+    selection-background-color: #5865f2;
+}
+
+QLineEdit:focus {
+    background-color: #111214;
+    border: 1px solid #5865f2;
+}
+
+QLineEdit:disabled {
+    color: #72767d;
+    background-color: #2b2d31;
+}
+
+QPushButton {
+    outline: none;
+    background-color: #5865f2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #4752c4;
+}
+
+QPushButton:pressed {
+    background-color: #3c45a5;
+}
+
+QPushButton:disabled {
+    background-color: #3f4147;
+    color: #72767d;
 }

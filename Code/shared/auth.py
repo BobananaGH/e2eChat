@@ -1,9 +1,11 @@
-# code/shared/auth.py
+# Code/shared/auth.py
 
 import hashlib
 import hmac
 import secrets
+import sqlite3
 import threading
+from pathlib import Path
 
 
 class AuthError(Exception):
@@ -24,9 +26,7 @@ class InvalidUsernameError(AuthError):
 
 class AuthManager:
     """
-    Authentication manager.
-
-    This class is intentionally separate from the E2EE implementation.
+    SQLite-backed authentication manager.
 
     Authentication answers:
         "Who is this user?"
@@ -34,8 +34,8 @@ class AuthManager:
     E2EE answers:
         "Can the server read this user's messages?"
 
-    The server may use this class to authenticate users, while the
-    actual ECDH/AES-GCM operations remain inside client/core/crypto.py.
+    User accounts are persisted in SQLite so they survive
+    server restarts.
     """
 
     MIN_USERNAME_LENGTH = 3
@@ -43,20 +43,71 @@ class AuthManager:
 
     MIN_PASSWORD_LENGTH = 6
 
-    def __init__(self):
-        # {
-        #     username: {
-        #         "password_hash": "...",
-        #         "salt": "..."
-        #     }
-        # }
-        #
-        # This is intentionally in-memory for the current project.
-        # A database can replace this later without changing the
-        # E2EE architecture.
-        self._users = {}
+    def __init__(self, db_path=None):
+        """
+        Initialize the authentication database.
+
+        By default the database is stored at:
+
+            Code/server/data/users.db
+        """
+
+        if db_path is None:
+            base_dir = Path(__file__).resolve().parent.parent
+            db_path = base_dir / "server" / "data" / "users.db"
+
+        self.db_path = Path(db_path)
+
+        self.db_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
         self._lock = threading.Lock()
+
+        self._initialize_database()
+
+    # ==================================================================
+    # DATABASE
+    # ==================================================================
+
+    def _get_connection(self):
+        """
+        Create a new SQLite connection.
+
+        A separate connection is used for each operation because
+        the server handles clients across multiple threads.
+        """
+
+        connection = sqlite3.connect(
+            self.db_path,
+            timeout=10,
+        )
+
+        connection.execute(
+            "PRAGMA foreign_keys = ON"
+        )
+
+        return connection
+
+    def _initialize_database(self):
+        """
+        Create the users table if it does not already exist.
+        """
+
+        with self._get_connection() as connection:
+
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    password_hash TEXT NOT NULL,
+                    salt TEXT NOT NULL
+                )
+                """
+            )
+
+            connection.commit()
 
     # ==================================================================
     # USERNAME VALIDATION
@@ -72,6 +123,7 @@ class AuthManager:
         - 3-32 characters
         - letters, numbers, underscore, and hyphen only
         """
+
         if not isinstance(username, str):
             return False
 
@@ -98,6 +150,7 @@ class AuthManager:
         """
         Validate password length.
         """
+
         return (
             isinstance(password, str)
             and len(password) >= cls.MIN_PASSWORD_LENGTH
@@ -108,12 +161,16 @@ class AuthManager:
     # ==================================================================
 
     @staticmethod
-    def _hash_password(password: str, salt: bytes) -> bytes:
+    def _hash_password(
+        password: str,
+        salt: bytes,
+    ) -> bytes:
         """
         Derive a password hash using PBKDF2-HMAC-SHA256.
 
-        The plaintext password is never stored.
+        Plaintext passwords are never stored.
         """
+
         return hashlib.pbkdf2_hmac(
             "sha256",
             password.encode("utf-8"),
@@ -149,6 +206,7 @@ class AuthManager:
             ValueError
             UserAlreadyExistsError
         """
+
         username = username.strip()
 
         if not self.validate_username(username):
@@ -163,23 +221,50 @@ class AuthManager:
                 f"{self.MIN_PASSWORD_LENGTH} characters."
             )
 
+        salt = secrets.token_bytes(16)
+
+        password_hash = self._hash_password(
+            password,
+            salt,
+        )
+
+        password_hash_hex = self._encode_bytes(
+            password_hash
+        )
+
+        salt_hex = self._encode_bytes(
+            salt
+        )
+
         with self._lock:
-            if username in self._users:
+
+            try:
+
+                with self._get_connection() as connection:
+
+                    connection.execute(
+                        """
+                        INSERT INTO users (
+                            username,
+                            password_hash,
+                            salt
+                        )
+                        VALUES (?, ?, ?)
+                        """,
+                        (
+                            username,
+                            password_hash_hex,
+                            salt_hex,
+                        ),
+                    )
+
+                    connection.commit()
+
+            except sqlite3.IntegrityError:
+
                 raise UserAlreadyExistsError(
                     f"Username '{username}' already exists."
                 )
-
-            salt = secrets.token_bytes(16)
-
-            password_hash = self._hash_password(
-                password,
-                salt,
-            )
-
-            self._users[username] = {
-                "password_hash": self._encode_bytes(password_hash),
-                "salt": self._encode_bytes(salt),
-            }
 
         return True
 
@@ -199,21 +284,41 @@ class AuthManager:
             True if credentials are valid.
             False otherwise.
         """
+
         username = username.strip()
 
         with self._lock:
-            user = self._users.get(username)
+
+            with self._get_connection() as connection:
+
+                cursor = connection.execute(
+                    """
+                    SELECT password_hash, salt
+                    FROM users
+                    WHERE username = ?
+                    """,
+                    (username,),
+                )
+
+                user = cursor.fetchone()
 
         if user is None:
             return False
 
+        password_hash_hex, salt_hex = user
+
         try:
-            salt = self._decode_hex(user["salt"])
-            expected_hash = self._decode_hex(
-                user["password_hash"]
+
+            salt = self._decode_hex(
+                salt_hex
             )
 
-        except (KeyError, ValueError):
+            expected_hash = self._decode_hex(
+                password_hash_hex
+            )
+
+        except (ValueError, TypeError):
+
             return False
 
         actual_hash = self._hash_password(
@@ -230,14 +335,57 @@ class AuthManager:
     # USER LOOKUP
     # ==================================================================
 
-    def user_exists(self, username: str) -> bool:
+    def user_exists(
+        self,
+        username: str,
+    ) -> bool:
         """
         Check whether a username exists.
         """
+
         username = username.strip()
 
         with self._lock:
-            return username in self._users
+
+            with self._get_connection() as connection:
+
+                cursor = connection.execute(
+                    """
+                    SELECT 1
+                    FROM users
+                    WHERE username = ?
+                    LIMIT 1
+                    """,
+                    (username,),
+                )
+
+                return cursor.fetchone() is not None
+
+    # ==================================================================
+    # USERNAMES
+    # ==================================================================
+
+    def get_usernames(self) -> list[str]:
+        """
+        Return all registered usernames.
+        """
+
+        with self._lock:
+
+            with self._get_connection() as connection:
+
+                cursor = connection.execute(
+                    """
+                    SELECT username
+                    FROM users
+                    ORDER BY username COLLATE NOCASE
+                    """
+                )
+
+                return [
+                    row[0]
+                    for row in cursor.fetchall()
+                ]
 
     # ==================================================================
     # DEBUG / TESTING
@@ -246,8 +394,17 @@ class AuthManager:
     def user_count(self) -> int:
         """
         Return the number of registered users.
-
-        Useful for tests.
         """
+
         with self._lock:
-            return len(self._users)
+
+            with self._get_connection() as connection:
+
+                cursor = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM users
+                    """
+                )
+
+                return cursor.fetchone()[0]
