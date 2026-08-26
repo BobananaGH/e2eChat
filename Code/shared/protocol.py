@@ -1,50 +1,170 @@
-# code/shared/protocol.py
+# Code/shared/protocol.py
 import json
 import struct
+import threading
+
 from enum import Enum
 
+
 class MessageType(str, Enum):
-    # Auth
     REGISTER = "REGISTER"
     LOGIN = "LOGIN"
+
     AUTH_SUCCESS = "AUTH_SUCCESS"
     AUTH_FAIL = "AUTH_FAIL"
-    
-    # Key Exchange
+
     UPLOAD_PUBLIC_KEY = "UPLOAD_PUBLIC_KEY"
     FETCH_PUBLIC_KEY = "FETCH_PUBLIC_KEY"
     PUBLIC_KEY_RESPONSE = "PUBLIC_KEY_RESPONSE"
-    
-    # Messaging
+
     SEND_MSG = "SEND_MSG"
     RELAY_MSG = "RELAY_MSG"
-    
-    # Status / General
+
     ERROR = "ERROR"
     SUCCESS = "SUCCESS"
 
+
 class Protocol:
-    HEADER_FORMAT = "!I"  # 4-byte unsigned integer for payload length
+    HEADER_FORMAT = "!I"
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-    @staticmethod
-    def pack(msg_type: MessageType, payload: dict) -> bytes:
-        """Serializes message type and payload into a framed byte stream."""
+    MAX_PAYLOAD_SIZE = 10 * 1024 * 1024
+
+    @classmethod
+    def pack(cls, message_type, payload):
         data = {
-            "type": msg_type.value,
-            "payload": payload
+            "type": message_type.value,
+            "payload": payload,
         }
-        json_bytes = json.dumps(data).encode('utf-8')
-        header = struct.pack(Protocol.HEADER_FORMAT, len(json_bytes))
-        return header + json_bytes
 
-    @staticmethod
-    def unpack_header(header_bytes: bytes) -> int:
-        """Extracts expected payload length from header."""
-        return struct.unpack(Protocol.HEADER_FORMAT, header_bytes)[0]
+        encoded = json.dumps(
+            data,
+            separators=(",", ":"),
+        ).encode("utf-8")
 
-    @staticmethod
-    def parse_payload(payload_bytes: bytes) -> tuple[MessageType, dict]:
-        """Parses JSON byte payload into MessageType and data dictionary."""
-        data = json.loads(payload_bytes.decode('utf-8'))
-        return MessageType(data["type"]), data["payload"]
+        if len(encoded) > cls.MAX_PAYLOAD_SIZE:
+            raise ValueError(
+                "Payload too large."
+            )
+
+        header = struct.pack(
+            cls.HEADER_FORMAT,
+            len(encoded),
+        )
+
+        return header + encoded
+
+    @classmethod
+    def unpack_header(cls, header):
+        if len(header) != cls.HEADER_SIZE:
+            raise ValueError(
+                "Invalid header."
+            )
+
+        length = struct.unpack(
+            cls.HEADER_FORMAT,
+            header,
+        )[0]
+
+        if length <= 0:
+            raise ValueError(
+                "Invalid payload length."
+            )
+
+        if length > cls.MAX_PAYLOAD_SIZE:
+            raise ValueError(
+                "Payload too large."
+            )
+
+        return length
+
+    @classmethod
+    def parse_payload(cls, payload):
+        data = json.loads(
+            payload.decode("utf-8")
+        )
+
+        return (
+            MessageType(data["type"]),
+            data["payload"],
+        )
+
+
+class Connection:
+    """
+    Reliable transport wrapper around a connected TLS socket.
+
+    Handles:
+        - protocol framing
+        - exact reads
+        - sending messages
+        - receiving messages
+    """
+
+    def __init__(self, socket):
+        self.socket = socket
+        self._send_lock = threading.Lock()
+
+    def send(
+        self,
+        message_type,
+        payload,
+    ):
+        packet = Protocol.pack(
+            message_type,
+            payload,
+        )
+
+        with self._send_lock:
+            self.socket.sendall(packet)
+
+    def recv(self):
+        header = self.recv_exact(
+            Protocol.HEADER_SIZE
+        )
+
+        if not header:
+            return None
+
+        payload_length = Protocol.unpack_header(
+            header
+        )
+
+        payload = self.recv_exact(
+            payload_length
+        )
+
+        if not payload:
+            return None
+
+        return Protocol.parse_payload(
+            payload
+        )
+
+    def recv_exact(self, size):
+        data = bytearray()
+
+        while len(data) < size:
+            chunk = self.socket.recv(
+                size - len(data)
+            )
+
+            if not chunk:
+                return None
+
+            data.extend(chunk)
+
+        return bytes(data)
+
+    def close(self):
+        try:
+            self.socket.shutdown(
+                2  # SHUT_RDWR
+            )
+        except OSError:
+            pass
+
+        try:
+            self.socket.close()
+        except OSError:
+            pass

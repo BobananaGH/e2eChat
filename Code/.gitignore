@@ -6,7 +6,3 @@ file_storage/
 *.log
 .env
 
-# Certificates & Keys
-certs/*.key
-certs/*.crt
-certs/*.pem

@@ -1,130 +1,319 @@
-# code/client/client.py
-import os
-import socket
-import ssl
-import json
+# Code/client/client.py
+
 import threading
-from shared import protocol as p
+
+from shared.protocol import Connection, MessageType
+
 from client.core.crypto import E2EECrypto
+from client.core.key_exchange import KeyExchange
+from client.core.messaging import Messaging
+from client.core.router import MessageRouter
+from client.tls import TLSConnection
+
 
 class E2EEClient:
-    def __init__(self, host="127.0.0.1", port=5000, timeout=10.0):
+    """
+    High-level E2EE chat client.
+
+    Responsibilities:
+        - Establish the client TLS connection
+        - Manage the protocol connection
+        - Run the receiver thread
+        - Track authentication state
+        - Expose the public client API
+        - Coordinate client core modules
+
+    This class does NOT implement:
+        - Password hashing/authentication
+        - TLS implementation
+        - Protocol framing
+        - ECDH implementation
+        - AES-GCM implementation
+        - Message encryption/decryption
+        - Incoming message routing
+    """
+
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 5000,
+        timeout: float = 10.0,
+    ):
         self.host = host
         self.port = port
+
         self.username = None
+        self.authenticated = False
+        self.running = False
+
+        # --------------------------------------------------------------
+        # E2EE CORE
+        # --------------------------------------------------------------
+
         self.crypto = E2EECrypto()
-        self.peers = {}  # Stores session keys: target_username -> E2EECrypto instance
-        self.on_message_received = None  # Callback for GUI (e.g. PySide6 signal)
+        self.key_exchange = KeyExchange(self)
+        self.messaging = Messaging(self)
 
-        # 1. Establish TLS Transport Socket (Using your certs/server.crt)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        cert_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "certs", "server.crt")
+        # --------------------------------------------------------------
+        # MESSAGE ROUTER
+        # --------------------------------------------------------------
+
+        self.router = MessageRouter(self)
+
+        # --------------------------------------------------------------
+        # TLS CONNECTION
+        # --------------------------------------------------------------
+
+        self.tls = TLSConnection(
+            self.host,
+            self.port,
+            timeout,
         )
-        context.load_verify_locations(cert_path)
-        
-        # Self-signed cert workaround for local testing (localhost)
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_REQUIRED
 
-        raw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        raw_sock.settimeout(timeout)
-        raw_sock.connect((host, port))
+        # --------------------------------------------------------------
+        # PROTOCOL CONNECTION
+        # --------------------------------------------------------------
 
-        self.socket = context.wrap_socket(raw_sock, server_hostname=host)
-        self.socket.settimeout(None)  # Remove timeout for long-lived listener thread
-        
-        self.conn = p.Connection(self.socket)
+        self.conn = Connection(
+            self.tls.socket
+        )
 
-    def register_and_connect(self, username: str) -> bool:
-        """Registers the user's DH Public Key with the relay server."""
-        self.username = username
-        pub_key_b64 = self.crypto.get_public_bytes_b64()
-        
-        payload = json.dumps({
-            "type": "REGISTER",
-            "payload": {
-                "username": self.username,
-                "pub_key": pub_key_b64
-            }
-        })
-        self.conn.send_line(payload)
-        
-        # Start listener background thread
-        threading.Thread(target=self._listen_loop, daemon=True).start()
-        return True
+        # --------------------------------------------------------------
+        # RECEIVER THREAD
+        # --------------------------------------------------------------
 
-    def initiate_key_exchange(self, target_username: str):
-        """Requests the target peer's DH Public Key from the server."""
-        payload = json.dumps({
-            "type": "GET_PUBKEY",
-            "payload": {"target": target_username}
-        })
-        self.conn.send_line(payload)
+        self.running = True
 
-    def send_chat_message(self, target_username: str, plaintext: str) -> bool:
-        """Encrypts message payload using AES-GCM and sends through server relay."""
-        if target_username not in self.peers:
-            print(f"[!] No shared key with {target_username}. Initiating handshake...")
-            self.initiate_key_exchange(target_username)
-            return False
+        self._listener_thread = threading.Thread(
+            target=self._listen_loop,
+            daemon=True,
+        )
 
-        # End-to-End Encrypt payload
-        encrypted_data = self.peers[target_username].encrypt_message(plaintext)
-        
-        relay_payload = json.dumps({
-            "type": "MSG_RELAY",
-            "payload": {
-                "from": self.username,
-                "to": target_username,
-                "nonce": encrypted_data["nonce"],
-                "ciphertext": encrypted_data["ciphertext"]
-            }
-        })
-        self.conn.send_line(relay_payload)
-        return True
+        self._listener_thread.start()
+
+    # ==================================================================
+    # INTERNAL SEND
+    # ==================================================================
+
+    def _send(
+        self,
+        message_type: MessageType,
+        payload: dict,
+    ):
+        """
+        Send one protocol message.
+
+        Used internally by client core modules.
+        """
+
+        if not self.running:
+            raise RuntimeError(
+                "Client is not connected."
+            )
+
+        self.conn.send(
+            message_type,
+            payload,
+        )
+
+    # ==================================================================
+    # LISTENER
+    # ==================================================================
 
     def _listen_loop(self):
-        """Listens continuously for incoming server responses and messages."""
-        while True:
+        """
+        Continuously receive messages from the server.
+
+        Connection handles:
+            - TCP framing
+            - exact reads
+            - protocol serialization
+            - protocol parsing
+
+        MessageRouter handles:
+            - authentication responses
+            - public-key responses
+            - encrypted messages
+            - server responses
+        """
+
+        while self.running:
             try:
-                line = self.conn.recv_line()
-                if not line:
+                message = self.conn.recv()
+
+                if message is None:
                     break
-                
-                msg = json.loads(line)
-                mtype = msg.get("type")
-                payload = msg.get("payload", {})
 
-                if mtype == "PUBKEY_RESP":
-                    target = payload["target"]
-                    peer_pub_key = payload["pub_key"]
-                    
-                    # Compute Shared Secret via DH & HKDF
-                    peer_session = E2EECrypto()
-                    peer_session.private_key = self.crypto.private_key
-                    peer_session.generate_shared_key(peer_pub_key)
-                    self.peers[target] = peer_session
-                    print(f"[+] E2EE Shared Key established with '{target}'")
+                message_type, payload = message
 
-                elif mtype == "MSG_RECEIVE":
-                    sender = payload["from"]
-                    nonce = payload["nonce"]
-                    ciphertext = payload["ciphertext"]
+                self.router.handle(
+                    message_type,
+                    payload,
+                )
 
-                    if sender in self.peers:
-                        decrypted_text = self.peers[sender].decrypt_message(nonce, ciphertext)
-                        if self.on_message_received:
-                            self.on_message_received(sender, decrypted_text)
-                        else:
-                            print(f"\n[{sender} -> ME]: {decrypted_text}")
-
-            except Exception as e:
-                print(f"[-] Connection listener error: {e}")
+            except (
+                ConnectionResetError,
+                BrokenPipeError,
+                OSError,
+            ):
                 break
 
+            except Exception as exc:
+                print(
+                    f"[CLIENT] Listener error: {exc}"
+                )
+                break
+
+        self.running = False
+
+        print("[CLIENT] Connection closed.")
+
+    # ==================================================================
+    # AUTHENTICATION
+    # ==================================================================
+
+    def register(
+        self,
+        username: str,
+        password: str,
+    ):
+        """
+        Request registration.
+
+        Authentication is performed by the server.
+        """
+
+        username = username.strip()
+
+        if not username:
+            raise ValueError(
+                "Username cannot be empty."
+            )
+
+        self.username = username
+
+        self._send(
+            MessageType.REGISTER,
+            {
+                "username": username,
+                "password": password,
+            },
+        )
+
+    def login(
+        self,
+        username: str,
+        password: str,
+    ):
+        """
+        Request login.
+
+        Authentication is performed by the server.
+        """
+
+        username = username.strip()
+
+        if not username:
+            raise ValueError(
+                "Username cannot be empty."
+            )
+
+        self.username = username
+
+        self._send(
+            MessageType.LOGIN,
+            {
+                "username": username,
+                "password": password,
+            },
+        )
+
+    # ==================================================================
+    # KEY EXCHANGE
+    # ==================================================================
+
+    def initiate_key_exchange(
+        self,
+        target_username: str,
+    ):
+        """
+        Request another user's public ECDH key.
+        """
+
+        if not self.authenticated:
+            raise RuntimeError(
+                "Authenticate before starting key exchange."
+            )
+
+        return self.key_exchange.request_public_key(
+            target_username
+        )
+
+    # ==================================================================
+    # MESSAGING
+    # ==================================================================
+
+    def send_chat_message(
+        self,
+        target_username: str,
+        plaintext: str,
+    ) -> bool:
+        """
+        Send an E2EE encrypted chat message.
+
+        Messaging handles:
+            - session lookup
+            - encryption
+            - key exchange initiation
+            - SEND_MSG construction
+        """
+
+        if not self.authenticated:
+            raise RuntimeError(
+                "Authenticate before sending messages."
+            )
+
+        return self.messaging.send(
+            target_username,
+            plaintext,
+        )
+
+    # ==================================================================
+    # CALLBACK
+    # ==================================================================
+
+    def set_message_callback(
+        self,
+        callback,
+    ):
+        """
+        Set the callback invoked after a message is
+        successfully decrypted.
+
+        Callback signature:
+
+            callback(sender, plaintext)
+        """
+
+        self.messaging.on_message_received = callback
+
+    # ==================================================================
+    # SHUTDOWN
+    # ==================================================================
+
     def close(self):
+        """
+        Close the client connection.
+        """
+
+        if not self.running:
+            return
+
+        self.running = False
+
         try:
             self.conn.close()
-        finally:
-            self.socket.close()
+        except OSError:
+            pass
+
+        print("[CLIENT] Closed.")
