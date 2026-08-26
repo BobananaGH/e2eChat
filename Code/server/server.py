@@ -1,5 +1,4 @@
 # Code/server/server.py
-
 import socket
 import threading
 
@@ -39,23 +38,23 @@ class ChatServer:
         self.host = host
         self.port = port
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # AUTHENTICATION
-        # --------------------------------------------------------------
+        # ==============================================================
 
         self.auth_manager = AuthManager()
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # ACTIVE CLIENTS
         #
         # {
         #     username: Connection
         # }
-        # --------------------------------------------------------------
+        # ==============================================================
 
         self.active_clients = {}
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # E2EE PUBLIC KEYS
         #
         # {
@@ -63,25 +62,25 @@ class ChatServer:
         # }
         #
         # Private keys NEVER exist on the server.
-        # --------------------------------------------------------------
+        # ==============================================================
 
         self.public_keys = {}
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # SHARED STATE LOCK
-        # --------------------------------------------------------------
+        # ==============================================================
 
         self.lock = threading.Lock()
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # TLS
-        # --------------------------------------------------------------
+        # ==============================================================
 
         self.tls = TLSServer()
 
-        # --------------------------------------------------------------
+        # ==============================================================
         # SERVER SOCKET
-        # --------------------------------------------------------------
+        # ==============================================================
 
         self.server_socket = None
         self.is_running = False
@@ -116,10 +115,8 @@ class ChatServer:
         # TLS
         # --------------------------------------------------------------
 
-        self.server_socket = (
-            self.tls.wrap_socket(
-                raw_socket
-            )
+        self.server_socket = self.tls.wrap_socket(
+            raw_socket
         )
 
         self.is_running = True
@@ -130,7 +127,6 @@ class ChatServer:
         )
 
         try:
-
             while self.is_running:
 
                 client_socket, address = (
@@ -145,10 +141,15 @@ class ChatServer:
         except OSError as exc:
 
             if self.is_running:
-
                 print(
                     f"[SERVER] Socket error: {exc}"
                 )
+
+        except KeyboardInterrupt:
+
+            print(
+                "\n[SERVER] Shutdown requested."
+            )
 
         except Exception as exc:
 
@@ -203,7 +204,6 @@ class ChatServer:
 
             try:
                 self.server_socket.close()
-
             except OSError:
                 pass
 
@@ -212,24 +212,18 @@ class ChatServer:
         print("[SERVER] Stopped.")
 
 
-# ======================================================================
-# ENTRY POINT
-# ======================================================================
-
-if __name__ == "__main__":
+def main():
+    """
+    Application entry point.
+    """
 
     server = ChatServer(
         host="127.0.0.1",
         port=5000,
     )
 
-    try:
-        server.start()
+    server.start()
 
-    except KeyboardInterrupt:
 
-        print(
-            "\n[SERVER] Shutdown requested."
-        )
-
-        server.stop()
+if __name__ == "__main__":
+    main()
